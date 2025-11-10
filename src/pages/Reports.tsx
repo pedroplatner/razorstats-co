@@ -15,18 +15,44 @@ interface Transaction {
   total: number;
   created_at: string;
   notes: string | null;
-  barbers: { name: string };
+  barbers: { id: string; name: string };
   payment_methods: { name: string };
+}
+
+interface Barber {
+  id: string;
+  name: string;
 }
 
 export default function Reports() {
   const [transactions, setTransactions] = useState<Transaction[]>([]);
+  const [barbers, setBarbers] = useState<Barber[]>([]);
   const [loading, setLoading] = useState(true);
   const [filterPeriod, setFilterPeriod] = useState('today');
+  const [filterBarber, setFilterBarber] = useState('all');
+
+  useEffect(() => {
+    loadBarbers();
+  }, []);
 
   useEffect(() => {
     loadTransactions();
-  }, [filterPeriod]);
+  }, [filterPeriod, filterBarber]);
+
+  const loadBarbers = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('barbers')
+        .select('id, name')
+        .eq('active', true)
+        .order('name');
+
+      if (error) throw error;
+      setBarbers(data || []);
+    } catch (error) {
+      console.error('Error loading barbers:', error);
+    }
+  };
 
   const loadTransactions = async () => {
     setLoading(true);
@@ -35,7 +61,7 @@ export default function Reports() {
         .from('transactions')
         .select(`
           *,
-          barbers(name),
+          barbers(id, name),
           payment_methods(name)
         `)
         .order('created_at', { ascending: false });
@@ -51,6 +77,10 @@ export default function Reports() {
       } else if (filterPeriod === 'month') {
         const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
         query = query.gte('created_at', startOfMonth.toISOString());
+      }
+
+      if (filterBarber !== 'all') {
+        query = query.eq('barber_id', filterBarber);
       }
 
       const { data, error } = await query;
@@ -104,9 +134,10 @@ export default function Reports() {
 
       <Card className="border-border bg-card">
         <CardHeader>
-          <div className="flex items-center justify-between">
-            <CardTitle>Filtrar por Período</CardTitle>
-            <div className="w-[200px]">
+          <CardTitle>Filtros</CardTitle>
+          <div className="mt-4 grid gap-4 md:grid-cols-2">
+            <div className="space-y-2">
+              <Label>Período</Label>
               <Select value={filterPeriod} onValueChange={setFilterPeriod}>
                 <SelectTrigger>
                   <SelectValue />
@@ -116,6 +147,23 @@ export default function Reports() {
                   <SelectItem value="week">Últimos 7 dias</SelectItem>
                   <SelectItem value="month">Este mês</SelectItem>
                   <SelectItem value="all">Todos</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            
+            <div className="space-y-2">
+              <Label>Barbeiro</Label>
+              <Select value={filterBarber} onValueChange={setFilterBarber}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Todos os Barbeiros</SelectItem>
+                  {barbers.map((barber) => (
+                    <SelectItem key={barber.id} value={barber.id}>
+                      {barber.name}
+                    </SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
             </div>
