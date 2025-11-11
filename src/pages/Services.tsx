@@ -7,7 +7,7 @@ import { Label } from '@/components/ui/label';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Switch } from '@/components/ui/switch';
 import { toast } from 'sonner';
-import { Plus, Scissors } from 'lucide-react';
+import { Plus, Scissors, Edit } from 'lucide-react';
 
 interface Service {
   id: string;
@@ -21,6 +21,8 @@ export default function Services() {
   const [services, setServices] = useState<Service[]>([]);
   const [loading, setLoading] = useState(true);
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [editDialog, setEditDialog] = useState(false);
+  const [editingService, setEditingService] = useState<Service | null>(null);
   const [newService, setNewService] = useState({
     name: '',
     price: 0,
@@ -80,6 +82,34 @@ export default function Services() {
       toast.success(currentActive ? 'Serviço desativado' : 'Serviço ativado');
     } catch (error: any) {
       console.error('Error toggling service:', error);
+      toast.error(error.message || 'Erro ao atualizar serviço');
+    }
+  };
+
+  const handleEdit = async () => {
+    if (!editingService || !editingService.name.trim() || editingService.price <= 0) {
+      toast.error('Preencha todos os campos corretamente');
+      return;
+    }
+
+    try {
+      const { error } = await supabase
+        .from('services')
+        .update({
+          name: editingService.name,
+          price: editingService.price,
+          duration_minutes: editingService.duration_minutes,
+        })
+        .eq('id', editingService.id);
+
+      if (error) throw error;
+
+      toast.success('Serviço atualizado com sucesso!');
+      setEditDialog(false);
+      setEditingService(null);
+      loadServices();
+    } catch (error: any) {
+      console.error('Error updating service:', error);
       toast.error(error.message || 'Erro ao atualizar serviço');
     }
   };
@@ -167,19 +197,79 @@ export default function Services() {
                   Duração: {service.duration_minutes} minutos
                 </p>
                 <div className="flex items-center justify-between pt-2">
-                  <span className="text-sm text-muted-foreground">
-                    {service.active ? 'Ativo' : 'Inativo'}
-                  </span>
-                  <Switch
-                    checked={service.active}
-                    onCheckedChange={() => toggleActive(service.id, service.active)}
-                  />
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => {
+                      setEditingService(service);
+                      setEditDialog(true);
+                    }}
+                  >
+                    <Edit className="mr-2 h-3 w-3" />
+                    Editar
+                  </Button>
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm text-muted-foreground">
+                      {service.active ? 'Ativo' : 'Inativo'}
+                    </span>
+                    <Switch
+                      checked={service.active}
+                      onCheckedChange={() => toggleActive(service.id, service.active)}
+                    />
+                  </div>
                 </div>
               </div>
             </CardContent>
           </Card>
         ))}
       </div>
+
+      <Dialog open={editDialog} onOpenChange={setEditDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Editar Serviço</DialogTitle>
+          </DialogHeader>
+          {editingService && (
+            <div className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="edit-name">Nome *</Label>
+                <Input
+                  id="edit-name"
+                  value={editingService.name}
+                  onChange={(e) => setEditingService({ ...editingService, name: e.target.value })}
+                  placeholder="Nome do serviço"
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="edit-price">Preço (R$) *</Label>
+                  <Input
+                    id="edit-price"
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    value={editingService.price}
+                    onChange={(e) => setEditingService({ ...editingService, price: parseFloat(e.target.value) })}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="edit-duration">Duração (min)</Label>
+                  <Input
+                    id="edit-duration"
+                    type="number"
+                    min="1"
+                    value={editingService.duration_minutes}
+                    onChange={(e) => setEditingService({ ...editingService, duration_minutes: parseInt(e.target.value) })}
+                  />
+                </div>
+              </div>
+              <Button onClick={handleEdit} className="w-full">
+                Salvar Alterações
+              </Button>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

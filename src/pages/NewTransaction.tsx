@@ -22,24 +22,34 @@ interface Service {
   price: number;
 }
 
+interface Product {
+  id: string;
+  name: string;
+  quantity: number;
+}
+
 interface PaymentMethod {
   id: string;
   name: string;
 }
 
-interface ServiceItem {
-  serviceId: string;
+interface TransactionItem {
+  type: 'SERVICE' | 'PRODUCT';
+  serviceId?: string;
+  productId?: string;
   quantity: number;
   price: number;
+  commission: number;
 }
 
 export default function NewTransaction() {
   const [barbers, setBarbers] = useState<Barber[]>([]);
   const [services, setServices] = useState<Service[]>([]);
+  const [products, setProducts] = useState<Product[]>([]);
   const [paymentMethods, setPaymentMethods] = useState<PaymentMethod[]>([]);
   const [selectedBarberId, setSelectedBarberId] = useState('');
   const [selectedPaymentMethodId, setSelectedPaymentMethodId] = useState('');
-  const [serviceItems, setServiceItems] = useState<ServiceItem[]>([]);
+  const [items, setItems] = useState<TransactionItem[]>([]);
   const [notes, setNotes] = useState('');
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
@@ -51,14 +61,16 @@ export default function NewTransaction() {
 
   const loadData = async () => {
     try {
-      const [barbersData, servicesData, paymentMethodsData] = await Promise.all([
+      const [barbersData, servicesData, productsData, paymentMethodsData] = await Promise.all([
         supabase.from('barbers').select('*').eq('active', true),
         supabase.from('services').select('*').eq('active', true),
+        supabase.from('inventory_items').select('id, name, quantity').gt('quantity', 0),
         supabase.from('payment_methods').select('*').eq('active', true),
       ]);
 
       if (barbersData.data) setBarbers(barbersData.data);
       if (servicesData.data) setServices(servicesData.data);
+      if (productsData.data) setProducts(productsData.data);
       if (paymentMethodsData.data) setPaymentMethods(paymentMethodsData.data);
     } catch (error) {
       console.error('Error loading data:', error);
@@ -66,41 +78,62 @@ export default function NewTransaction() {
     }
   };
 
-  const addServiceItem = () => {
-    if (services.length > 0) {
-      setServiceItems([
-        ...serviceItems,
-        { serviceId: services[0].id, quantity: 1, price: services[0].price },
+  const addItem = (type: 'SERVICE' | 'PRODUCT') => {
+    if (type === 'SERVICE' && services.length > 0) {
+      setItems([
+        ...items,
+        { 
+          type: 'SERVICE', 
+          serviceId: services[0].id, 
+          quantity: 1, 
+          price: services[0].price,
+          commission: 0
+        },
+      ]);
+    } else if (type === 'PRODUCT' && products.length > 0) {
+      setItems([
+        ...items,
+        { 
+          type: 'PRODUCT', 
+          productId: products[0].id, 
+          quantity: 1, 
+          price: 0,
+          commission: 5
+        },
       ]);
     }
   };
 
-  const removeServiceItem = (index: number) => {
-    setServiceItems(serviceItems.filter((_, i) => i !== index));
+  const removeItem = (index: number) => {
+    setItems(items.filter((_, i) => i !== index));
   };
 
-  const updateServiceItem = (index: number, field: keyof ServiceItem, value: any) => {
-    const updated = [...serviceItems];
+  const updateItem = (index: number, field: keyof TransactionItem, value: any) => {
+    const updated = [...items];
     updated[index] = { ...updated[index], [field]: value };
     
-    if (field === 'serviceId') {
+    if (field === 'serviceId' && updated[index].type === 'SERVICE') {
       const service = services.find(s => s.id === value);
       if (service) {
         updated[index].price = service.price;
       }
     }
     
-    setServiceItems(updated);
+    setItems(updated);
   };
 
   const calculateTotal = () => {
-    return serviceItems.reduce((sum, item) => sum + (item.price * item.quantity), 0);
+    return items.reduce((sum, item) => sum + (item.price * item.quantity), 0);
+  };
+
+  const calculateCommission = () => {
+    return items.reduce((sum, item) => sum + (item.commission * item.quantity), 0);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    if (!selectedBarberId || !selectedPaymentMethodId || serviceItems.length === 0) {
+    if (!selectedBarberId || !selectedPaymentMethodId || items.length === 0) {
       toast.error('Preencha todos os campos obrigatórios');
       return;
     }
@@ -124,11 +157,14 @@ export default function NewTransaction() {
 
       if (transactionError) throw transactionError;
 
-      const itemsToInsert = serviceItems.map(item => ({
+      const itemsToInsert = items.map(item => ({
         transaction_id: transaction.id,
-        service_id: item.serviceId,
+        type: item.type,
+        service_id: item.type === 'SERVICE' ? item.serviceId : null,
+        inventory_item_id: item.type === 'PRODUCT' ? item.productId : null,
         price: item.price,
         quantity: item.quantity,
+        commission: item.commission,
       }));
 
       const { error: itemsError } = await supabase
@@ -137,11 +173,11 @@ export default function NewTransaction() {
 
       if (itemsError) throw itemsError;
 
-      toast.success('Atendimento registrado com sucesso!');
+      toast.success('Transação registrada com sucesso!');
       navigate('/');
     } catch (error: any) {
       console.error('Error creating transaction:', error);
-      toast.error(error.message || 'Erro ao registrar atendimento');
+      toast.error(error.message || 'Erro ao registrar transação');
     } finally {
       setLoading(false);
     }
@@ -150,14 +186,14 @@ export default function NewTransaction() {
   return (
     <div className="mx-auto max-w-2xl space-y-6">
       <div>
-        <h1 className="text-3xl font-bold tracking-tight">Novo Atendimento</h1>
-        <p className="text-muted-foreground">Registre um novo atendimento</p>
+        <h1 className="text-3xl font-bold tracking-tight">Nova Transação</h1>
+        <p className="text-muted-foreground">Registre serviços e vendas de produtos</p>
       </div>
 
       <form onSubmit={handleSubmit}>
         <Card className="border-border bg-card">
           <CardHeader>
-            <CardTitle>Detalhes do Atendimento</CardTitle>
+            <CardTitle>Detalhes da Transação</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="space-y-2">
@@ -178,36 +214,75 @@ export default function NewTransaction() {
 
             <div className="space-y-2">
               <div className="flex items-center justify-between">
-                <Label>Serviços *</Label>
-                <Button type="button" size="sm" onClick={addServiceItem}>
-                  <Plus className="mr-2 h-4 w-4" />
-                  Adicionar Serviço
-                </Button>
+                <Label>Itens *</Label>
+                <div className="flex gap-2">
+                  <Button type="button" size="sm" onClick={() => addItem('SERVICE')}>
+                    <Plus className="mr-2 h-4 w-4" />
+                    Serviço
+                  </Button>
+                  <Button type="button" size="sm" variant="secondary" onClick={() => addItem('PRODUCT')}>
+                    <Plus className="mr-2 h-4 w-4" />
+                    Produto
+                  </Button>
+                </div>
               </div>
               
-              {serviceItems.map((item, index) => (
-                <div key={index} className="flex gap-2">
-                  <Select
-                    value={item.serviceId}
-                    onValueChange={(value) => updateServiceItem(index, 'serviceId', value)}
-                  >
-                    <SelectTrigger className="flex-1">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {services.map((service) => (
-                        <SelectItem key={service.id} value={service.id}>
-                          {service.name} - R$ {service.price.toFixed(2)}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+              {items.map((item, index) => (
+                <div key={index} className="flex gap-2 items-center">
+                  <span className="text-xs font-medium text-muted-foreground w-16">
+                    {item.type === 'SERVICE' ? 'Serviço' : 'Produto'}
+                  </span>
+                  
+                  {item.type === 'SERVICE' ? (
+                    <Select
+                      value={item.serviceId}
+                      onValueChange={(value) => updateItem(index, 'serviceId', value)}
+                    >
+                      <SelectTrigger className="flex-1">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {services.map((service) => (
+                          <SelectItem key={service.id} value={service.id}>
+                            {service.name} - R$ {service.price.toFixed(2)}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  ) : (
+                    <>
+                      <Select
+                        value={item.productId}
+                        onValueChange={(value) => updateItem(index, 'productId', value)}
+                      >
+                        <SelectTrigger className="flex-1">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {products.map((product) => (
+                            <SelectItem key={product.id} value={product.id}>
+                              {product.name} (Estoque: {product.quantity})
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <Input
+                        type="number"
+                        min="0"
+                        step="0.01"
+                        value={item.price}
+                        onChange={(e) => updateItem(index, 'price', parseFloat(e.target.value))}
+                        className="w-24"
+                        placeholder="Preço"
+                      />
+                    </>
+                  )}
                   
                   <Input
                     type="number"
                     min="1"
                     value={item.quantity}
-                    onChange={(e) => updateServiceItem(index, 'quantity', parseInt(e.target.value))}
+                    onChange={(e) => updateItem(index, 'quantity', parseInt(e.target.value))}
                     className="w-20"
                   />
                   
@@ -215,7 +290,7 @@ export default function NewTransaction() {
                     type="button"
                     variant="ghost"
                     size="icon"
-                    onClick={() => removeServiceItem(index)}
+                    onClick={() => removeItem(index)}
                   >
                     <Trash2 className="h-4 w-4" />
                   </Button>
@@ -250,11 +325,21 @@ export default function NewTransaction() {
               />
             </div>
 
-            <div className="flex items-center justify-between rounded-lg border border-border bg-secondary p-4">
-              <span className="text-lg font-medium">Total</span>
-              <span className="text-2xl font-bold text-primary">
-                R$ {calculateTotal().toFixed(2)}
-              </span>
+            <div className="space-y-2">
+              <div className="flex items-center justify-between rounded-lg border border-border bg-secondary p-4">
+                <span className="text-lg font-medium">Total</span>
+                <span className="text-2xl font-bold text-primary">
+                  R$ {calculateTotal().toFixed(2)}
+                </span>
+              </div>
+              {calculateCommission() > 0 && (
+                <div className="flex items-center justify-between rounded-lg border border-border bg-muted/50 p-3">
+                  <span className="text-sm font-medium">Comissão do Barbeiro</span>
+                  <span className="text-lg font-bold text-primary">
+                    R$ {calculateCommission().toFixed(2)}
+                  </span>
+                </div>
+              )}
             </div>
 
             <div className="flex gap-2">
@@ -262,7 +347,7 @@ export default function NewTransaction() {
                 Cancelar
               </Button>
               <Button type="submit" disabled={loading} className="flex-1">
-                {loading ? 'Salvando...' : 'Registrar Atendimento'}
+                {loading ? 'Salvando...' : 'Registrar Transação'}
               </Button>
             </div>
           </CardContent>
