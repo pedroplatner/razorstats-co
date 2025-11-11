@@ -193,30 +193,46 @@ export type Database = {
       }
       transaction_items: {
         Row: {
+          commission: number | null
           created_at: string
           id: string
+          inventory_item_id: string | null
           price: number
           quantity: number
-          service_id: string
+          service_id: string | null
           transaction_id: string
+          type: Database["public"]["Enums"]["transaction_item_type"]
         }
         Insert: {
+          commission?: number | null
           created_at?: string
           id?: string
+          inventory_item_id?: string | null
           price: number
           quantity?: number
-          service_id: string
+          service_id?: string | null
           transaction_id: string
+          type?: Database["public"]["Enums"]["transaction_item_type"]
         }
         Update: {
+          commission?: number | null
           created_at?: string
           id?: string
+          inventory_item_id?: string | null
           price?: number
           quantity?: number
-          service_id?: string
+          service_id?: string | null
           transaction_id?: string
+          type?: Database["public"]["Enums"]["transaction_item_type"]
         }
         Relationships: [
+          {
+            foreignKeyName: "transaction_items_inventory_item_id_fkey"
+            columns: ["inventory_item_id"]
+            isOneToOne: false
+            referencedRelation: "inventory_items"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "transaction_items_service_id_fkey"
             columns: ["service_id"]
@@ -330,6 +346,7 @@ export type Database = {
     Enums: {
       app_role: "admin" | "operator"
       movement_type: "in" | "out"
+      transaction_item_type: "SERVICE" | "PRODUCT"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -459,6 +476,7 @@ export const Constants = {
     Enums: {
       app_role: ["admin", "operator"],
       movement_type: ["in", "out"],
+      transaction_item_type: ["SERVICE", "PRODUCT"],
     },
   },
 } as const
