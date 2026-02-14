@@ -7,19 +7,21 @@ import { Label } from '@/components/ui/label';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Switch } from '@/components/ui/switch';
 import { toast } from 'sonner';
-import { Plus, UserCheck, UserX, Pencil } from 'lucide-react';
+import { Plus, UserCheck, UserX, Pencil, Phone, Percent } from 'lucide-react';
 
 interface Barber {
   id: string;
   name: string;
   active: boolean;
+  phone: string | null;
+  commission_percent: number;
 }
 
 export default function Barbers() {
   const [barbers, setBarbers] = useState<Barber[]>([]);
   const [loading, setLoading] = useState(true);
   const [dialogOpen, setDialogOpen] = useState(false);
-  const [newBarber, setNewBarber] = useState({ name: '' });
+  const [newBarber, setNewBarber] = useState({ name: '', phone: '', commission_percent: 50 });
   const [editDialogOpen, setEditDialogOpen] = useState(false);
   const [editingBarber, setEditingBarber] = useState<Barber | null>(null);
 
@@ -51,12 +53,16 @@ export default function Barbers() {
     }
 
     try {
-      const { error } = await supabase.from('barbers').insert(newBarber);
+      const { error } = await supabase.from('barbers').insert({
+        name: newBarber.name,
+        phone: newBarber.phone || null,
+        commission_percent: newBarber.commission_percent,
+      });
       if (error) throw error;
 
       toast.success('Barbeiro adicionado com sucesso!');
       setDialogOpen(false);
-      setNewBarber({ name: '' });
+      setNewBarber({ name: '', phone: '', commission_percent: 50 });
       loadBarbers();
     } catch (error: any) {
       console.error('Error adding barber:', error);
@@ -73,7 +79,11 @@ export default function Barbers() {
     try {
       const { error } = await supabase
         .from('barbers')
-        .update({ name: editingBarber.name })
+        .update({
+          name: editingBarber.name,
+          phone: editingBarber.phone || null,
+          commission_percent: editingBarber.commission_percent,
+        })
         .eq('id', editingBarber.id);
 
       if (error) throw error;
@@ -112,6 +122,41 @@ export default function Barbers() {
     );
   }
 
+  const barberFormFields = (
+    values: { name: string; phone: string; commission_percent: number },
+    onChange: (field: string, value: any) => void
+  ) => (
+    <div className="space-y-4">
+      <div className="space-y-2">
+        <Label>Nome *</Label>
+        <Input
+          value={values.name}
+          onChange={(e) => onChange('name', e.target.value)}
+          placeholder="Nome do barbeiro"
+        />
+      </div>
+      <div className="space-y-2">
+        <Label>Telefone</Label>
+        <Input
+          value={values.phone}
+          onChange={(e) => onChange('phone', e.target.value)}
+          placeholder="(00) 00000-0000"
+        />
+      </div>
+      <div className="space-y-2">
+        <Label>Comissão (%)</Label>
+        <Input
+          type="number"
+          min="0"
+          max="100"
+          value={values.commission_percent}
+          onChange={(e) => onChange('commission_percent', parseFloat(e.target.value) || 0)}
+          placeholder="50"
+        />
+      </div>
+    </div>
+  );
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -130,20 +175,12 @@ export default function Barbers() {
             <DialogHeader>
               <DialogTitle>Adicionar Barbeiro</DialogTitle>
             </DialogHeader>
-            <div className="space-y-4">
-              <div className="space-y-2">
-                <Label htmlFor="name">Nome *</Label>
-                <Input
-                  id="name"
-                  value={newBarber.name}
-                  onChange={(e) => setNewBarber({ name: e.target.value })}
-                  placeholder="Nome do barbeiro"
-                />
-              </div>
-              <Button onClick={handleAdd} className="w-full">
-                Adicionar
-              </Button>
-            </div>
+            {barberFormFields(newBarber, (field, value) =>
+              setNewBarber((prev) => ({ ...prev, [field]: value }))
+            )}
+            <Button onClick={handleAdd} className="w-full">
+              Adicionar
+            </Button>
           </DialogContent>
         </Dialog>
       </div>
@@ -172,7 +209,17 @@ export default function Barbers() {
                 )}
               </div>
             </CardHeader>
-            <CardContent>
+            <CardContent className="space-y-2">
+              {barber.phone && (
+                <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                  <Phone className="h-3.5 w-3.5" />
+                  <span>{barber.phone}</span>
+                </div>
+              )}
+              <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                <Percent className="h-3.5 w-3.5" />
+                <span>Comissão: {barber.commission_percent}%</span>
+              </div>
               <div className="flex items-center justify-between">
                 <span className="text-sm text-muted-foreground">
                   {barber.active ? 'Ativo' : 'Inativo'}
@@ -192,24 +239,19 @@ export default function Barbers() {
           <DialogHeader>
             <DialogTitle>Editar Barbeiro</DialogTitle>
           </DialogHeader>
-          {editingBarber && (
-            <div className="space-y-4">
-              <div className="space-y-2">
-                <Label htmlFor="edit-name">Nome *</Label>
-                <Input
-                  id="edit-name"
-                  value={editingBarber.name}
-                  onChange={(e) =>
-                    setEditingBarber({ ...editingBarber, name: e.target.value })
-                  }
-                  placeholder="Nome do barbeiro"
-                />
-              </div>
-              <Button onClick={handleEdit} className="w-full">
-                Salvar
-              </Button>
-            </div>
-          )}
+          {editingBarber &&
+            barberFormFields(
+              {
+                name: editingBarber.name,
+                phone: editingBarber.phone || '',
+                commission_percent: editingBarber.commission_percent,
+              },
+              (field, value) =>
+                setEditingBarber((prev) => (prev ? { ...prev, [field]: value } : prev))
+            )}
+          <Button onClick={handleEdit} className="w-full">
+            Salvar
+          </Button>
         </DialogContent>
       </Dialog>
     </div>
