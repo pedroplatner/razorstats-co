@@ -7,7 +7,7 @@ import { Label } from '@/components/ui/label';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Switch } from '@/components/ui/switch';
 import { toast } from 'sonner';
-import { Plus, UserCheck, UserX } from 'lucide-react';
+import { Plus, UserCheck, UserX, Pencil } from 'lucide-react';
 
 interface Barber {
   id: string;
@@ -20,6 +20,8 @@ export default function Barbers() {
   const [loading, setLoading] = useState(true);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [newBarber, setNewBarber] = useState({ name: '' });
+  const [editDialogOpen, setEditDialogOpen] = useState(false);
+  const [editingBarber, setEditingBarber] = useState<Barber | null>(null);
 
   useEffect(() => {
     loadBarbers();
@@ -59,6 +61,30 @@ export default function Barbers() {
     } catch (error: any) {
       console.error('Error adding barber:', error);
       toast.error(error.message || 'Erro ao adicionar barbeiro');
+    }
+  };
+
+  const handleEdit = async () => {
+    if (!editingBarber || !editingBarber.name.trim()) {
+      toast.error('Digite o nome do barbeiro');
+      return;
+    }
+
+    try {
+      const { error } = await supabase
+        .from('barbers')
+        .update({ name: editingBarber.name })
+        .eq('id', editingBarber.id);
+
+      if (error) throw error;
+
+      toast.success('Barbeiro atualizado com sucesso!');
+      setEditDialogOpen(false);
+      setEditingBarber(null);
+      loadBarbers();
+    } catch (error: any) {
+      console.error('Error updating barber:', error);
+      toast.error(error.message || 'Erro ao atualizar barbeiro');
     }
   };
 
@@ -127,11 +153,24 @@ export default function Barbers() {
           <Card key={barber.id} className="border-border bg-card">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium">{barber.name}</CardTitle>
-              {barber.active ? (
-                <UserCheck className="h-4 w-4 text-primary" />
-              ) : (
-                <UserX className="h-4 w-4 text-muted-foreground" />
-              )}
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-7 w-7"
+                  onClick={() => {
+                    setEditingBarber({ ...barber });
+                    setEditDialogOpen(true);
+                  }}
+                >
+                  <Pencil className="h-3.5 w-3.5" />
+                </Button>
+                {barber.active ? (
+                  <UserCheck className="h-4 w-4 text-primary" />
+                ) : (
+                  <UserX className="h-4 w-4 text-muted-foreground" />
+                )}
+              </div>
             </CardHeader>
             <CardContent>
               <div className="flex items-center justify-between">
@@ -147,6 +186,32 @@ export default function Barbers() {
           </Card>
         ))}
       </div>
+
+      <Dialog open={editDialogOpen} onOpenChange={setEditDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Editar Barbeiro</DialogTitle>
+          </DialogHeader>
+          {editingBarber && (
+            <div className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="edit-name">Nome *</Label>
+                <Input
+                  id="edit-name"
+                  value={editingBarber.name}
+                  onChange={(e) =>
+                    setEditingBarber({ ...editingBarber, name: e.target.value })
+                  }
+                  placeholder="Nome do barbeiro"
+                />
+              </div>
+              <Button onClick={handleEdit} className="w-full">
+                Salvar
+              </Button>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
