@@ -17,23 +17,29 @@ export type Database = {
       barbers: {
         Row: {
           active: boolean
+          commission_percent: number
           created_at: string
           id: string
           name: string
+          phone: string | null
           updated_at: string
         }
         Insert: {
           active?: boolean
+          commission_percent?: number
           created_at?: string
           id?: string
           name: string
+          phone?: string | null
           updated_at?: string
         }
         Update: {
           active?: boolean
+          commission_percent?: number
           created_at?: string
           id?: string
           name?: string
+          phone?: string | null
           updated_at?: string
         }
         Relationships: []
